@@ -251,6 +251,7 @@ Thumbs.db
 # Test files that shouldn't be committed
 test_integration_market_data.py
 test_options_integration.py
+manual/
 
 # Temporary test outputs
 *.tmp
