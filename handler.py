@@ -3,6 +3,11 @@ Main Lambda handler for options analytics API.
 Orchestrates all components to fetch and process options data.
 """
 
+try:
+    import unzip_requirements
+except ImportError:
+    pass
+
 import json
 import time
 from typing import Dict, Any, Optional

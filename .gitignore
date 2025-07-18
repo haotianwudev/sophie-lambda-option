@@ -256,3 +256,12 @@ manual/
 # Temporary test outputs
 *.tmp
 *.temp
+
+# Docker and deployment artifacts
+*.zip
+curl_cffi_layer.zip
+.requirements.zip
+
+# ECR and container deployment
+.docker/
+docker-compose.override.yml

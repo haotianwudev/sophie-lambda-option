@@ -8,13 +8,17 @@ version = "0.1.0"
 description = "Serverless backend for options analytics with implied volatility calculations"
 authors = [{name = "Developer", email = "dev@example.com"}]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
-    "yfinance>=0.2.0",
+    "yfinance>=0.2.65",
     "py_vollib>=1.0.1",
-    "pandas>=1.5.0",
-    "numpy>=1.24.0",
-    "requests>=2.28.0",
+    "pandas>=2.2.0",
+    "numpy>=1.26.4",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.3",
+    "pytz>=2024.1",
+    "urllib3>=2.2.0",
+    "lxml>=5.1.0",
 ]
 
 [project.optional-dependencies]

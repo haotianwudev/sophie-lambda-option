@@ -18,10 +18,9 @@
     "test-performance-all": "python3 scripts/performance_test.py --all",
     "test-cold-start": "python3 scripts/performance_test.py --cold-start 3"
   },
-  "dependencies": {},
   "devDependencies": {
     "serverless": "^3.38.0",
-    "serverless-python-requirements": "^6.0.0",
+    "serverless-lift": "^1.31.0",
     "serverless-offline": "^13.3.0"
   },
   "keywords": [

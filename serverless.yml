@@ -3,11 +3,17 @@ frameworkVersion: '3'
 
 provider:
   name: aws
-  runtime: python3.9
   region: ${opt:region, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
   timeout: 30
-  memorySize: 512
+  memorySize: 2048
+  architecture: x86_64
+  ecr:
+    images:
+      options-analytics:
+        path: ./
+        file: Dockerfile
+        platform: linux/amd64
   environment:
     PYTHONPATH: "${PYTHONPATH}:${AWS_LAMBDA_RUNTIME_API}"
     STAGE: ${self:provider.stage}
@@ -38,37 +44,14 @@ provider:
 
 functions:
   optionsAnalytics:
-    handler: handler.get_options_analytics
+    image:
+      uri: 633690269460.dkr.ecr.us-east-1.amazonaws.com/options-analytics-api-dev:latest
     description: 'Fetch options analytics with implied volatility calculations'
     events:
-      - http:
+      - httpApi:
           path: /options-analytics
           method: get
-          cors:
-            origin: '*'
-            headers:
-              - Content-Type
-              - X-Amz-Date
-              - Authorization
-              - X-Api-Key
-              - X-Amz-Security-Token
-              - X-Amz-User-Agent
-            allowCredentials: false
     environment:
       LOG_LEVEL: ${opt:log-level, 'INFO'}
 
-plugins:
-  - serverless-python-requirements
-
-custom:
-  pythonRequirements:
-    dockerizePip: false
-    pythonBin: python3
-    pipCmdExtraArgs:
-      - --no-cache-dir
-    slim: true
-    strip: false
-    layer: false
-    usePipenv: false
-    usePoetry: false
-    invalidateCaches: true
+# No plugins needed for container deployment
