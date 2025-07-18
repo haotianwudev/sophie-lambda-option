@@ -1,0 +1,74 @@
+service: options-analytics-api
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  timeout: 30
+  memorySize: 512
+  environment:
+    PYTHONPATH: "${PYTHONPATH}:${AWS_LAMBDA_RUNTIME_API}"
+    STAGE: ${self:provider.stage}
+  httpApi:
+    cors:
+      allowedOrigins:
+        - '*'
+      allowedHeaders:
+        - Content-Type
+        - X-Amz-Date
+        - Authorization
+        - X-Api-Key
+        - X-Amz-Security-Token
+        - X-Amz-User-Agent
+      allowedMethods:
+        - GET
+        - OPTIONS
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: 
+            - 'arn:aws:logs:${aws:region}:${aws:accountId}:log-group:/aws/lambda/*:*:*'
+
+functions:
+  optionsAnalytics:
+    handler: handler.get_options_analytics
+    description: 'Fetch options analytics with implied volatility calculations'
+    events:
+      - http:
+          path: /options-analytics
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+    environment:
+      LOG_LEVEL: ${opt:log-level, 'INFO'}
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: false
+    pythonBin: python3
+    pipCmdExtraArgs:
+      - --no-cache-dir
+    slim: true
+    strip: false
+    layer: false
+    usePipenv: false
+    usePoetry: false
+    invalidateCaches: true

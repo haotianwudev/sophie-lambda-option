@@ -1,0 +1,37 @@
+{
+  "name": "options-analytics-api",
+  "version": "1.0.0",
+  "description": "Serverless backend for SPY options analytics with implied volatility calculations",
+  "main": "handler.py",
+  "scripts": {
+    "deploy": "serverless deploy",
+    "deploy-dev": "serverless deploy --stage dev",
+    "deploy-prod": "serverless deploy --stage prod",
+    "remove": "serverless remove",
+    "logs": "serverless logs -f optionsAnalytics",
+    "invoke": "serverless invoke -f optionsAnalytics",
+    "offline": "serverless offline",
+    "test-local": "python3 scripts/local_test.py",
+    "test-local-suite": "python3 scripts/local_test.py --suite",
+    "test-integration": "python3 scripts/integration_test.py",
+    "test-performance": "python3 scripts/performance_test.py",
+    "test-performance-all": "python3 scripts/performance_test.py --all",
+    "test-cold-start": "python3 scripts/performance_test.py --cold-start 3"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "serverless": "^3.38.0",
+    "serverless-python-requirements": "^6.0.0",
+    "serverless-offline": "^13.3.0"
+  },
+  "keywords": [
+    "serverless",
+    "aws",
+    "lambda",
+    "options",
+    "implied-volatility",
+    "finance"
+  ],
+  "author": "",
+  "license": "MIT"
+}
