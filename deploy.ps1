@@ -32,6 +32,23 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "✅ Docker image built and pushed successfully!"
 
+# Verify the image architecture
+Write-Host "Verifying image architecture..."
+$manifest = docker manifest inspect $ecrUri`:$ImageTag 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ Failed to inspect image manifest!"
+    exit 1
+}
+
+if ($manifest -match '"manifests"') {
+    Write-Host "❌ WARNING: Multi-architecture image detected! This will cause Lambda deployment issues."
+    Write-Host "   The image should be single architecture (linux/amd64 only)."
+    Write-Host "   Check the README for correct build commands."
+    exit 1
+} else {
+    Write-Host "✅ Image verified as single architecture (linux/amd64)"
+}
+
 Write-Host "Deploying to AWS Lambda..."
 serverless deploy --stage $Stage --region $Region
 

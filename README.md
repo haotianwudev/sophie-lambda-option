@@ -65,6 +65,51 @@ This project is configured for container-based deployment to AWS Lambda using Am
 - **Dependencies**: All Python packages installed in Lambda task root
 - **Single Architecture**: Built specifically for linux/amd64
 
+### ⚠️ Critical Docker Configuration
+
+**IMPORTANT**: AWS Lambda has specific requirements for Docker images:
+
+1. **Single Architecture Only**: Lambda does NOT support multi-architecture (fat) images
+   - ❌ **Wrong**: `docker build -t image:tag .`
+   - ✅ **Correct**: `docker buildx build --platform linux/amd64 --provenance=false -t image:tag . --push`
+
+2. **Required Flags**:
+   - `--platform linux/amd64`: Ensures single architecture
+   - `--provenance=false`: Prevents multi-arch manifest creation
+   - `--push`: Pushes directly to registry (required for buildx)
+
+3. **Error Symptoms**: If you see this error, you have a multi-arch image:
+   ```
+   The image manifest, config or layer media type for the source image ... is not supported.
+   ```
+
+4. **Verification**: Check image architecture:
+   ```bash
+   docker manifest inspect your-image:tag
+   ```
+   - ✅ **Correct**: Shows single `config` and `layers` sections
+   - ❌ **Wrong**: Shows `manifests` array with multiple architectures
+
+### Dependencies Installation
+
+The Dockerfile uses a multi-stage build to ensure dependencies are properly installed:
+
+```dockerfile
+# Builder stage
+FROM --platform=linux/amd64 public.ecr.aws/lambda/python:3.12 as builder
+COPY requirements.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt -t ${LAMBDA_TASK_ROOT}
+
+# Final stage
+FROM --platform=linux/amd64 public.ecr.aws/lambda/python:3.12
+COPY --from=builder ${LAMBDA_TASK_ROOT} ${LAMBDA_TASK_ROOT}
+```
+
+**Key Points**:
+- Dependencies must be installed to `${LAMBDA_TASK_ROOT}` (not `/var/task`)
+- Use `-t ${LAMBDA_TASK_ROOT}` flag with pip install
+- Multi-stage build ensures clean final image
+
 ## 📡 API Usage
 
 ### Endpoint
@@ -161,21 +206,48 @@ python scripts/performance_test.py
 
 ### Common Issues
 
-1. **Service Unavailable (503)**
+1. **Docker Image Architecture Error**
+   ```
+   The image manifest, config or layer media type for the source image ... is not supported.
+   ```
+   **Solution**: Use the correct build command:
+   ```bash
+   docker buildx build --platform linux/amd64 --provenance=false -t your-image:tag . --push
+   ```
+   **Prevention**: Always use `--platform linux/amd64 --provenance=false` flags
+
+2. **Service Unavailable (503)**
    - Usually temporary, retry the request
    - Check Lambda logs for detailed error information
 
-2. **Timeout Errors**
+3. **Timeout Errors**
    - Increase Lambda timeout in serverless.yml
    - Consider optimizing data processing
 
-3. **Memory Issues**
+4. **Memory Issues**
    - Increase Lambda memory allocation
    - Check for memory leaks in data processing
+
+5. **Missing Dependencies in Container**
+   ```
+   ModuleNotFoundError: No module named 'yfinance'
+   ```
+   **Solution**: Ensure Dockerfile installs dependencies to `${LAMBDA_TASK_ROOT}`:
+   ```dockerfile
+   RUN pip install --no-cache-dir -r requirements.txt -t ${LAMBDA_TASK_ROOT}
+   ```
 
 ### Logs
 ```bash
 serverless logs -f optionsAnalytics --stage dev --region us-east-1 --tail
+```
+
+### Docker Image Verification
+```bash
+# Check if image is single architecture
+docker manifest inspect your-image:tag
+
+# Should show single config/layers, NOT a manifests array
 ```
 
 ## 📈 Monitoring
