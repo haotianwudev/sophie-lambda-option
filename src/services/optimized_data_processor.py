@@ -1,8 +1,9 @@
 """
-Data processor for structuring and formatting options analytics data.
+Optimized data processor for structuring and formatting options analytics data.
 """
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+import numpy as np
 
 from ..models.option_data import OptionData, ExpirationData, MarketData, StockData, VixData
 from ..utils.data_formatter import (
@@ -13,11 +14,16 @@ from ..utils.data_formatter import (
 from ..utils.time_utils import get_current_utc_timestamp
 from ..utils.logging_utils import StructuredLogger
 from ..utils.error_handling import CalculationError
-from .options_calculator import OptionsCalculator
+from ..utils.optimized_calculation_utils import (
+    calculate_moneyness,
+    is_within_moneyness_range,
+    filter_options_by_moneyness_batch
+)
+from .optimized_options_calculator import OptimizedOptionsCalculator
 
 
-class DataProcessor:
-    """Processes and structures options data for API responses."""
+class OptimizedDataProcessor:
+    """Optimized processor for structuring and formatting options analytics data."""
     
     def __init__(self, risk_free_rate: float = 0.03, logger: Optional[StructuredLogger] = None):
         """
@@ -27,7 +33,7 @@ class DataProcessor:
             risk_free_rate: Risk-free interest rate for calculations
             logger: Optional structured logger instance
         """
-        self.calculator = OptionsCalculator(risk_free_rate, logger)
+        self.calculator = OptimizedOptionsCalculator(risk_free_rate, logger)
         self.logger = logger or StructuredLogger(__name__)
     
     def structure_options_by_expiration(
@@ -40,6 +46,7 @@ class DataProcessor:
         """
         Structure raw options data by expiration date with calculated IV and delta.
         Also calculates moneyness and filters options by moneyness range.
+        Optimized version with batch processing.
         
         Args:
             raw_options_data: Dictionary with expiration dates as keys and option lists as values
@@ -50,8 +57,6 @@ class DataProcessor:
         Returns:
             List of ExpirationData objects with calculated values
         """
-        from ..utils.calculation_utils import calculate_moneyness, is_within_moneyness_range
-        
         expiration_data_list = []
         
         for expiration_date, options_list in raw_options_data.items():
@@ -66,11 +71,11 @@ class DataProcessor:
             calls = self._convert_raw_options_to_objects(calls_raw)
             puts = self._convert_raw_options_to_objects(puts_raw)
             
-            # Calculate IV and delta for all options
-            processed_calls = self.calculator.process_options_with_iv(
+            # Calculate IV and delta for all options using batch processing
+            processed_calls = self.calculator.process_options_with_iv_batch(
                 calls, underlying_price, expiration_date
             )
-            processed_puts = self.calculator.process_options_with_iv(
+            processed_puts = self.calculator.process_options_with_iv_batch(
                 puts, underlying_price, expiration_date
             )
             
@@ -135,7 +140,13 @@ class DataProcessor:
                     last_price=float(raw_option.get('last_price', 0)) if raw_option.get('last_price') is not None else None,
                     implied_volatility=None,  # Will be calculated
                     delta=None,  # Will be calculated
-                    option_type=raw_option.get('option_type', 'c')
+                    option_type=raw_option.get('option_type', 'c'),
+                    contract_symbol=raw_option.get('contract_symbol'),
+                    last_trade_date=raw_option.get('last_trade_date'),
+                    bid=float(raw_option.get('bid', 0)) if raw_option.get('bid') is not None else None,
+                    ask=float(raw_option.get('ask', 0)) if raw_option.get('ask') is not None else None,
+                    volume=int(raw_option.get('volume', 0)) if raw_option.get('volume') is not None else None,
+                    open_interest=int(raw_option.get('open_interest', 0)) if raw_option.get('open_interest') is not None else None
                 )
                 options.append(option)
             except (ValueError, TypeError) as e:
@@ -278,35 +289,3 @@ class DataProcessor:
         except Exception as e:
             self.logger.error(f"Failed to format API response: {e}")
             raise
-    
-    def filter_expiration_dates_by_validity(
-        self,
-        expiration_dates: List[ExpirationData],
-        min_options_per_expiration: int = 1
-    ) -> List[ExpirationData]:
-        """
-        Filter expiration dates that have sufficient valid options.
-        
-        Args:
-            expiration_dates: List of ExpirationData objects
-            min_options_per_expiration: Minimum number of total options required
-            
-        Returns:
-            Filtered list of ExpirationData objects
-        """
-        filtered_expirations = []
-        
-        for expiration in expiration_dates:
-            total_options = len(expiration.calls) + len(expiration.puts)
-            
-            if total_options >= min_options_per_expiration:
-                filtered_expirations.append(expiration)
-            else:
-                self.logger.info(
-                    f"Filtering out expiration {expiration.expiration} "
-                    f"with only {total_options} valid options",
-                    expiration=expiration.expiration,
-                    total_options=total_options
-                )
-        
-        return filtered_expirations

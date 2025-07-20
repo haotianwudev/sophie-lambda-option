@@ -1,23 +1,35 @@
 """
-Script to compare the performance of the original and optimized handlers.
+Script to optimize the handler function for Lambda environment.
 """
-import sys
-import time
+import cProfile
+import pstats
+import io
 import json
-import unittest.mock as mock
+import time
+import sys
 from datetime import datetime, timezone
 from contextlib import contextmanager
+import unittest.mock as mock
 
-# Add parent directory to path to import handlers
+# Add parent directory to path to import handler
 sys.path.append('.')
 
-# Import both handlers
-import handler
-import optimized_handler
+from handler import get_options_analytics
 from src.services.market_data_fetcher import MarketDataFetcher
 from src.services.options_data_fetcher import OptionsDataFetcher
 from src.models.option_data import ExpirationData, OptionData
 
+@contextmanager
+def profile_code(sort_by='cumulative', lines=20):
+    """Context manager for profiling code blocks."""
+    pr = cProfile.Profile()
+    pr.enable()
+    yield
+    pr.disable()
+    s = io.StringIO()
+    ps = pstats.Stats(pr, stream=s).sort_stats(sort_by)
+    ps.print_stats(lines)
+    print(s.getvalue())
 
 def create_mock_event():
     """Create a mock API Gateway event."""
@@ -32,7 +44,6 @@ def create_mock_event():
             'requestId': 'test-request-id'
         }
     }
-
 
 def create_mock_market_data():
     """Create mock market data."""
@@ -50,7 +61,6 @@ def create_mock_market_data():
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
     }
-
 
 def create_mock_option_data():
     """Create mock option data."""
@@ -124,18 +134,46 @@ def create_mock_option_data():
     
     return expiration_data_list
 
-
-def test_handler_performance(handler_module, iterations=5):
-    """
-    Test the performance of a handler function.
+def profile_handler():
+    """Profile the handler function with mock data."""
+    # Create mock event
+    event = create_mock_event()
     
-    Args:
-        handler_module: The handler module to test
-        iterations: Number of iterations to run
-        
-    Returns:
-        Tuple of (average_time, min_time, max_time)
-    """
+    # Mock context
+    context = {}
+    
+    # Mock the external service calls
+    with mock.patch.object(MarketDataFetcher, 'fetch_enhanced_market_data') as mock_market_data:
+        with mock.patch.object(OptionsDataFetcher, 'fetch_filtered_option_chains') as mock_options_data:
+            # Set up mock return values
+            mock_market_data.return_value = create_mock_market_data()
+            mock_options_data.return_value = create_mock_option_data()
+            
+            # Profile the handler function
+            print("Profiling handler function...")
+            with profile_code(sort_by='cumulative', lines=30):
+                response = get_options_analytics(event, context)
+    
+    # Print response status code
+    response_body = json.loads(response['body'])
+    print(f"Response status code: {response['statusCode']}")
+    print(f"Response size: {len(response['body'])} bytes")
+    
+    # Print some statistics about the response
+    expiration_dates = response_body.get('expirationDates', [])
+    print(f"Number of expiration dates: {len(expiration_dates)}")
+    
+    total_options = 0
+    for exp in expiration_dates:
+        calls = len(exp.get('calls', []))
+        puts = len(exp.get('puts', []))
+        total_options += calls + puts
+        print(f"Expiration {exp.get('expiration')}: {calls} calls, {puts} puts")
+    
+    print(f"Total options: {total_options}")
+
+def measure_execution_time(iterations=5):
+    """Measure execution time over multiple iterations."""
     event = create_mock_event()
     context = {}
     
@@ -156,37 +194,22 @@ def test_handler_performance(handler_module, iterations=5):
                 
                 # Measure execution time
                 start_time = time.time()
-                response = handler_module.get_options_analytics(event, context)
+                response = get_options_analytics(event, context)
                 end_time = time.time()
                 execution_time = end_time - start_time
                 times.append(execution_time)
                 print(f"Execution time: {execution_time:.4f} seconds")
     
     avg_time = sum(times) / len(times)
-    min_time = min(times)
-    max_time = max(times)
-    
-    return avg_time, min_time, max_time
-
-
-def compare_handlers():
-    """Compare the performance of the original and optimized handlers."""
-    print("Testing original handler performance...")
-    print("-" * 50)
-    orig_avg, orig_min, orig_max = test_handler_performance(handler, iterations=3)
-    
-    print("\nTesting optimized handler performance...")
-    print("-" * 50)
-    opt_avg, opt_min, opt_max = test_handler_performance(optimized_handler, iterations=3)
-    
-    print("\nPerformance Comparison:")
-    print("=" * 50)
-    print(f"Original Handler: Avg: {orig_avg:.4f}s, Min: {orig_min:.4f}s, Max: {orig_max:.4f}s")
-    print(f"Optimized Handler: Avg: {opt_avg:.4f}s, Min: {opt_min:.4f}s, Max: {opt_max:.4f}s")
-    
-    improvement = ((orig_avg - opt_avg) / orig_avg) * 100
-    print(f"Performance Improvement: {improvement:.2f}%")
-
+    print(f"\nAverage execution time over {iterations} iterations: {avg_time:.4f} seconds")
+    print(f"Min time: {min(times):.4f} seconds")
+    print(f"Max time: {max(times):.4f} seconds")
 
 if __name__ == "__main__":
-    compare_handlers()
+    # Profile the handler function
+    profile_handler()
+    
+    # Measure execution time
+    print("\n" + "="*50)
+    print("Measuring execution time...")
+    measure_execution_time(iterations=3)

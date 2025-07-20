@@ -1,5 +1,5 @@
 """
-Main Lambda handler for options analytics API.
+Optimized Lambda handler for options analytics API.
 Orchestrates all components to fetch and process options data.
 Enhanced with additional market data, expiration filtering, and option calculations.
 """
@@ -12,11 +12,13 @@ except ImportError:
 import json
 import time
 from typing import Dict, Any, Optional
+import logging
+from src.utils.json_encoder import CustomJSONEncoder
 
 from src.services.market_data_fetcher import MarketDataFetcher
 from src.services.options_data_fetcher import OptionsDataFetcher
-from src.services.data_processor import DataProcessor
-from src.utils.data_formatter import validate_ticker_symbol
+from src.services.optimized_data_processor import OptimizedDataProcessor
+from src.utils.data_formatter import validate_ticker_symbol, format_market_data_for_response
 from src.utils.logging_utils import create_request_logger, configure_root_logger, performance_timer
 from src.utils.error_handling import (
     create_error_handler, DataFetchError, ValidationError, SystemError
@@ -24,6 +26,10 @@ from src.utils.error_handling import (
 
 # Configure root logger for Lambda
 configure_root_logger()
+
+# Set logging level for external libraries to reduce noise
+logging.getLogger('py_vollib').setLevel(logging.WARNING)
+logging.getLogger('py_lets_be_rational').setLevel(logging.WARNING)
 
 
 def parse_query_parameters(event: Dict[str, Any], logger) -> str:
@@ -161,7 +167,7 @@ def get_options_analytics(event, context):
         # Initialize services
         market_fetcher = MarketDataFetcher()
         options_fetcher = OptionsDataFetcher()
-        data_processor = DataProcessor()
+        data_processor = OptimizedDataProcessor()  # Use optimized data processor
         
         # Fetch enhanced market data with performance tracking
         with performance_timer(logger, "enhanced_market_data_fetch", ticker=validated_ticker):
@@ -368,7 +374,7 @@ def get_options_analytics(event, context):
                                 )
                 
                 # Format the market data for API response
-                response_data = data_processor.format_market_data_for_response(market_data)
+                response_data = format_market_data_for_response(market_data)
                 
                 # Log processing summary
                 total_options = sum(
@@ -395,9 +401,8 @@ def get_options_analytics(event, context):
                     
                     # Create a basic market data response without enhanced calculations
                     from src.models.option_data import MarketData, StockData, VixData
-                    from src.utils.data_formatter import format_market_data_for_response
                     
-                    # Create basic stock and VIX data
+                    # Create basic stock and VixData objects
                     stock_data = StockData(
                         price=stock_price,
                         previous_close=stock_prev_close,
@@ -440,7 +445,7 @@ def get_options_analytics(event, context):
                     )
         
         # Create successful response
-        response_body = json.dumps(response_data)
+        response_body = json.dumps(response_data, cls=CustomJSONEncoder)
         response = {
             'statusCode': 200,
             'headers': {

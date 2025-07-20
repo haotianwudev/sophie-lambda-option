@@ -154,6 +154,7 @@ class OptionsCalculator:
     ) -> List[OptionData]:
         """
         Process list of options and calculate implied volatility and delta.
+        Calculates IV based on bid, mid, and ask prices.
         Filters out options where calculations fail.
         
         Args:
@@ -164,11 +165,13 @@ class OptionsCalculator:
         Returns:
             List of OptionData objects with calculated IV and delta (filtered)
         """
+        from ..utils.calculation_utils import calculate_mid_price, calculate_implied_volatilities
+        
         processed_options = []
         time_to_exp = calculate_time_to_expiration(expiration_date)
         
         for option in options:
-            # Calculate implied volatility
+            # Calculate implied volatility based on last price (original method)
             iv = self.calculate_implied_volatility(
                 option_price=option.last_price,
                 underlying_price=underlying_price,
@@ -192,13 +195,46 @@ class OptionsCalculator:
                 option_type=option.option_type
             )
             
+            # Calculate mid price
+            mid_price = None
+            if option.bid is not None and option.ask is not None:
+                mid_price = calculate_mid_price(option.bid, option.ask)
+            
+            # Create option dictionary for IV calculations
+            option_dict = {
+                'strike': option.strike,
+                'bid': option.bid,
+                'ask': option.ask,
+                'impliedVolatility': iv  # Use the calculated IV as the YF IV
+            }
+            
+            # Calculate IVs based on bid, mid, and ask prices
+            iv_results = calculate_implied_volatilities(
+                option=option_dict,
+                current_price=underlying_price,
+                time_to_expiration=time_to_exp,
+                risk_free_rate=self.risk_free_rate,
+                option_type=option.option_type
+            )
+            
             # Create new OptionData with calculated values
             processed_option = OptionData(
                 strike=option.strike,
                 last_price=option.last_price,
-                implied_volatility=iv,
+                implied_volatility=iv,  # This will be used as impliedVolatilityYF
                 delta=delta_value,
-                option_type=option.option_type
+                option_type=option.option_type,
+                contract_symbol=option.contract_symbol,
+                last_trade_date=option.last_trade_date,
+                bid=option.bid,
+                ask=option.ask,
+                mid_price=mid_price,
+                volume=option.volume,
+                open_interest=option.open_interest,
+                moneyness=option.moneyness,
+                implied_volatility_bid=iv_results.get('impliedVolatilityBid'),
+                implied_volatility_mid=iv_results.get('impliedVolatilityMid'),
+                implied_volatility_ask=iv_results.get('impliedVolatilityAsk')
             )
             
             processed_options.append(processed_option)

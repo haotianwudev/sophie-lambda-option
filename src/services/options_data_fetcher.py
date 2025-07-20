@@ -101,12 +101,52 @@ class OptionsDataFetcher:
                 if strike <= 0 or last_price <= 0:
                     continue
                 
+                # Extract additional fields with fallbacks
+                contract_symbol = row.get('contractSymbol')
+                last_trade_date = row.get('lastTradeDate')
+                
+                # Handle bid and ask - try to convert to float, but handle errors
+                bid = None
+                ask = None
+                try:
+                    if row.get('bid') is not None:
+                        bid = float(row.get('bid'))
+                except (ValueError, TypeError):
+                    pass
+                
+                try:
+                    if row.get('ask') is not None:
+                        ask = float(row.get('ask'))
+                except (ValueError, TypeError):
+                    pass
+                
+                # Handle volume and open interest - try to convert to int, but handle errors
+                volume = None
+                open_interest = None
+                try:
+                    if row.get('volume') is not None:
+                        volume = int(row.get('volume'))
+                except (ValueError, TypeError):
+                    pass
+                
+                try:
+                    if row.get('openInterest') is not None:
+                        open_interest = int(row.get('openInterest'))
+                except (ValueError, TypeError):
+                    pass
+                
                 option_data = OptionData(
                     strike=strike,
                     last_price=last_price,
                     implied_volatility=None,  # Will be calculated later
                     delta=None,  # Will be calculated later
-                    option_type=option_type
+                    option_type=option_type,
+                    contract_symbol=contract_symbol,
+                    last_trade_date=last_trade_date,
+                    bid=bid,
+                    ask=ask,
+                    volume=volume,
+                    open_interest=open_interest
                 )
                 
                 options.append(option_data)
@@ -191,6 +231,37 @@ class OptionsDataFetcher:
             if isinstance(e, ValueError):
                 raise RuntimeError(str(e))
             raise RuntimeError(f"Failed to fetch option chains for {ticker}: {str(e)}")
+            
+    def fetch_filtered_option_chains(self, ticker: str) -> List[ExpirationData]:
+        """
+        Fetch option chains for specific target expiration periods (2w, 1m, 6w, 2m).
+        
+        Args:
+            ticker: Stock ticker symbol
+            
+        Returns:
+            List of ExpirationData objects for selected expiration dates
+            
+        Raises:
+            RuntimeError: If option chains cannot be fetched
+        """
+        try:
+            # First fetch all option chains
+            all_option_chains = self.fetch_all_option_chains(ticker)
+            
+            # Then filter to only include target expiration periods
+            from src.utils.expiration_selector import filter_expirations_by_target_periods
+            filtered_chains = filter_expirations_by_target_periods(all_option_chains)
+            
+            if not filtered_chains:
+                raise ValueError(f"No valid option chains found for target periods for ticker {ticker}")
+            
+            return filtered_chains
+            
+        except Exception as e:
+            if isinstance(e, ValueError):
+                raise RuntimeError(str(e))
+            raise RuntimeError(f"Failed to fetch filtered option chains for {ticker}: {str(e)}")
 
 
 # Convenience functions for direct usage
@@ -235,3 +306,17 @@ def get_all_option_chains(ticker: str) -> List[ExpirationData]:
     """
     fetcher = OptionsDataFetcher()
     return fetcher.fetch_all_option_chains(ticker)
+
+
+def get_filtered_option_chains(ticker: str) -> List[ExpirationData]:
+    """
+    Convenience function to fetch option chains for specific target expiration periods.
+    
+    Args:
+        ticker: Stock ticker symbol
+        
+    Returns:
+        List of ExpirationData objects for selected expiration dates
+    """
+    fetcher = OptionsDataFetcher()
+    return fetcher.fetch_filtered_option_chains(ticker)

@@ -1,18 +1,17 @@
 """
-Script to compare the performance of the original and optimized handlers.
+Script to test the optimized handler with different input sizes.
 """
 import sys
 import time
 import json
 import unittest.mock as mock
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from contextlib import contextmanager
 
 # Add parent directory to path to import handlers
 sys.path.append('.')
 
-# Import both handlers
-import handler
+# Import optimized handler
 import optimized_handler
 from src.services.market_data_fetcher import MarketDataFetcher
 from src.services.options_data_fetcher import OptionsDataFetcher
@@ -52,29 +51,36 @@ def create_mock_market_data():
     }
 
 
-def create_mock_option_data():
-    """Create mock option data."""
+def create_mock_option_data(num_expirations=4, num_strikes=7):
+    """
+    Create mock option data with variable size.
+    
+    Args:
+        num_expirations: Number of expiration dates
+        num_strikes: Number of strike prices per expiration
+        
+    Returns:
+        List of ExpirationData objects
+    """
     # Create expiration dates
-    expiration_dates = [
-        "2025-07-25",  # 1 week
-        "2025-08-01",  # 2 weeks
-        "2025-08-15",  # ~4 weeks
-        "2025-09-05"   # ~7 weeks
-    ]
+    base_date = datetime(2025, 7, 18, tzinfo=timezone.utc)
+    expiration_dates = []
+    
+    for i in range(num_expirations):
+        # Add 7 days for each expiration
+        exp_date = base_date + timedelta(days=(i+1)*7)
+        expiration_dates.append(exp_date.strftime("%Y-%m-%d"))
     
     # Current stock price
     current_price = 627.58
     
     # Create strikes around current price
-    strikes = [
-        round(current_price * 0.85),  # 533
-        round(current_price * 0.90),  # 565
-        round(current_price * 0.95),  # 596
-        round(current_price * 1.00),  # 628
-        round(current_price * 1.05),  # 659
-        round(current_price * 1.10),  # 690
-        round(current_price * 1.15)   # 722
-    ]
+    strikes = []
+    strike_range = 0.3  # Range from 0.85 to 1.15
+    for i in range(num_strikes):
+        moneyness = 0.85 + (strike_range * i / (num_strikes - 1))
+        strike = round(current_price * moneyness)
+        strikes.append(strike)
     
     expiration_data_list = []
     
@@ -125,12 +131,13 @@ def create_mock_option_data():
     return expiration_data_list
 
 
-def test_handler_performance(handler_module, iterations=5):
+def test_with_input_size(num_expirations, num_strikes, iterations=3):
     """
-    Test the performance of a handler function.
+    Test the optimized handler with a specific input size.
     
     Args:
-        handler_module: The handler module to test
+        num_expirations: Number of expiration dates
+        num_strikes: Number of strike prices per expiration
         iterations: Number of iterations to run
         
     Returns:
@@ -141,11 +148,15 @@ def test_handler_performance(handler_module, iterations=5):
     
     # Create mock data
     mock_market_data_value = create_mock_market_data()
-    mock_options_data_value = create_mock_option_data()
+    mock_options_data_value = create_mock_option_data(num_expirations, num_strikes)
+    
+    total_options = num_expirations * num_strikes * 2  # Both calls and puts
+    
+    print(f"Testing with {num_expirations} expirations, {num_strikes} strikes ({total_options} total options)")
     
     times = []
     for i in range(iterations):
-        print(f"Iteration {i+1}/{iterations}...")
+        print(f"  Iteration {i+1}/{iterations}...")
         
         # Mock the external service calls
         with mock.patch.object(MarketDataFetcher, 'fetch_enhanced_market_data') as mock_market_data:
@@ -156,37 +167,49 @@ def test_handler_performance(handler_module, iterations=5):
                 
                 # Measure execution time
                 start_time = time.time()
-                response = handler_module.get_options_analytics(event, context)
+                response = optimized_handler.get_options_analytics(event, context)
                 end_time = time.time()
                 execution_time = end_time - start_time
                 times.append(execution_time)
-                print(f"Execution time: {execution_time:.4f} seconds")
+                print(f"  Execution time: {execution_time:.4f} seconds")
     
     avg_time = sum(times) / len(times)
     min_time = min(times)
     max_time = max(times)
     
-    return avg_time, min_time, max_time
+    print(f"  Average: {avg_time:.4f}s, Min: {min_time:.4f}s, Max: {max_time:.4f}s")
+    print()
+    
+    return avg_time, min_time, max_time, total_options
 
 
-def compare_handlers():
-    """Compare the performance of the original and optimized handlers."""
-    print("Testing original handler performance...")
-    print("-" * 50)
-    orig_avg, orig_min, orig_max = test_handler_performance(handler, iterations=3)
-    
-    print("\nTesting optimized handler performance...")
-    print("-" * 50)
-    opt_avg, opt_min, opt_max = test_handler_performance(optimized_handler, iterations=3)
-    
-    print("\nPerformance Comparison:")
+def run_input_size_tests():
+    """Run tests with different input sizes."""
+    print("Testing optimized handler with different input sizes...")
     print("=" * 50)
-    print(f"Original Handler: Avg: {orig_avg:.4f}s, Min: {orig_min:.4f}s, Max: {orig_max:.4f}s")
-    print(f"Optimized Handler: Avg: {opt_avg:.4f}s, Min: {opt_min:.4f}s, Max: {opt_max:.4f}s")
     
-    improvement = ((orig_avg - opt_avg) / orig_avg) * 100
-    print(f"Performance Improvement: {improvement:.2f}%")
+    results = []
+    
+    # Test with different combinations of expirations and strikes
+    test_configs = [
+        (4, 7),    # Small: 4 expirations, 7 strikes (56 options)
+        (8, 10),   # Medium: 8 expirations, 10 strikes (160 options)
+        (12, 15),  # Large: 12 expirations, 15 strikes (360 options)
+        (16, 20)   # Extra Large: 16 expirations, 20 strikes (640 options)
+    ]
+    
+    for exps, strikes in test_configs:
+        avg_time, min_time, max_time, total_options = test_with_input_size(exps, strikes)
+        results.append((exps, strikes, total_options, avg_time))
+    
+    print("\nSummary:")
+    print("=" * 50)
+    print("Expirations | Strikes | Total Options | Avg Time (s)")
+    print("-" * 50)
+    
+    for exps, strikes, total_options, avg_time in results:
+        print(f"{exps:11d} | {strikes:7d} | {total_options:12d} | {avg_time:.4f}")
 
 
 if __name__ == "__main__":
-    compare_handlers()
+    run_input_size_tests()

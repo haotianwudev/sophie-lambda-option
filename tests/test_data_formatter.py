@@ -3,10 +3,18 @@ Unit tests for data formatting utilities.
 """
 import pytest
 from datetime import datetime, timezone
-from src.models.option_data import OptionData, ExpirationData, MarketData
+from src.models.option_data import (
+    OptionData, 
+    ExpirationData, 
+    MarketData, 
+    StockData, 
+    VixData
+)
 from src.utils.data_formatter import (
     format_option_for_response,
     format_expiration_for_response,
+    format_stock_data_for_response,
+    format_vix_data_for_response,
     format_market_data_for_response,
     validate_ticker_symbol,
     filter_valid_options
@@ -77,28 +85,87 @@ class TestDataFormatter:
         assert formatted["calls"][0]["strike"] == 450.0
         assert formatted["puts"][0]["delta"] == -0.48
     
+    def test_format_stock_data_for_response(self):
+        """Test formatting StockData for API response."""
+        timestamp = datetime(2025, 1, 16, 14, 30, 0, tzinfo=timezone.utc)
+        stock_data = StockData(
+            price=450.25,
+            previous_close=445.75,
+            percent_change=1.01,
+            timestamp=timestamp
+        )
+        
+        formatted = format_stock_data_for_response(stock_data)
+        
+        expected = {
+            "price": 450.25,
+            "previousClose": 445.75,
+            "percentChange": 1.01,
+            "timestamp": "2025-01-16T14:30:00Z"
+        }
+        
+        assert formatted == expected
+    
+    def test_format_vix_data_for_response(self):
+        """Test formatting VixData for API response."""
+        timestamp = datetime(2025, 1, 16, 14, 30, 5, tzinfo=timezone.utc)
+        vix_data = VixData(
+            value=18.75,
+            previous_close=17.85,
+            percent_change=5.04,
+            timestamp=timestamp
+        )
+        
+        formatted = format_vix_data_for_response(vix_data)
+        
+        expected = {
+            "value": 18.75,
+            "previousClose": 17.85,
+            "percentChange": 5.04,
+            "timestamp": "2025-01-16T14:30:05Z"
+        }
+        
+        assert formatted == expected
+    
     def test_format_market_data_for_response(self):
         """Test formatting complete MarketData for API response."""
-        timestamp = datetime(2025, 1, 16, 14, 30, 0, tzinfo=timezone.utc)
+        stock_timestamp = datetime(2025, 1, 16, 14, 30, 0, tzinfo=timezone.utc)
+        vix_timestamp = datetime(2025, 1, 16, 14, 30, 5, tzinfo=timezone.utc)
         call = OptionData(450.0, 2.50, 0.185, 0.52, 'c')
         expiration = ExpirationData("2025-01-17", [call], [])
         
+        stock_data = StockData(
+            price=450.25,
+            previous_close=445.75,
+            percent_change=1.01,
+            timestamp=stock_timestamp
+        )
+        
+        vix_data = VixData(
+            value=18.75,
+            previous_close=17.85,
+            percent_change=5.04,
+            timestamp=vix_timestamp
+        )
+        
         market_data = MarketData(
             ticker="spy",  # lowercase to test uppercase conversion
-            stock_price=450.25,
-            vix_value=18.75,
-            data_timestamp=timestamp,
-            vix_timestamp=timestamp,
+            stock=stock_data,
+            vix=vix_data,
             expiration_dates=[expiration]
         )
         
         formatted = format_market_data_for_response(market_data)
         
         assert formatted["ticker"] == "SPY"
-        assert formatted["stockPrice"] == 450.25
-        assert formatted["vixValue"] == 18.75
-        assert formatted["dataTimestamp"] == "2025-01-16T14:30:00Z"
-        assert formatted["vixTimestamp"] == "2025-01-16T14:30:00Z"
+        assert formatted["stock"]["price"] == 450.25
+        assert formatted["stock"]["previousClose"] == 445.75
+        assert formatted["stock"]["percentChange"] == 1.01
+        assert formatted["stock"]["timestamp"] == "2025-01-16T14:30:00Z"
+        assert formatted["vix"]["value"] == 18.75
+        assert formatted["vix"]["previousClose"] == 17.85
+        assert formatted["vix"]["percentChange"] == 5.04
+        assert formatted["vix"]["timestamp"] == "2025-01-16T14:30:05Z"
         assert len(formatted["expirationDates"]) == 1
     
     def test_validate_ticker_symbol_valid(self):
