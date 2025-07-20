@@ -36,7 +36,7 @@ def create_mock_event():
         'httpMethod': 'GET',
         'path': '/options-analytics',
         'queryStringParameters': {
-            'ticker': 'SPY'
+            'ticker': '^SPX'
         },
         'headers': {},
         'requestContext': {

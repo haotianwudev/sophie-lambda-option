@@ -169,8 +169,8 @@ def validate_ticker_symbol(ticker: str) -> str:
     # Clean ticker: remove whitespace and convert to uppercase
     cleaned_ticker = ticker.strip().upper()
     
-    # Basic validation: alphanumeric characters only
-    if not cleaned_ticker.replace('.', '').replace('-', '').isalnum():
+    # Basic validation: allow alphanumeric characters, dots, hyphens, and carets (for indices like ^SPX, ^VIX)
+    if not all(c.isalnum() or c in '.-^' for c in cleaned_ticker):
         raise ValueError(f"Invalid ticker symbol: {ticker}")
     
     return cleaned_ticker

@@ -39,8 +39,8 @@ class OptionsDataFetcher:
         if not formatted_ticker:
             raise ValueError("Ticker cannot be empty after formatting")
         
-        # Basic validation - ticker should be alphanumeric with possible dots/hyphens
-        if not all(c.isalnum() or c in '.-' for c in formatted_ticker):
+        # Basic validation - ticker should be alphanumeric with possible dots/hyphens/carets
+        if not all(c.isalnum() or c in '.-^' for c in formatted_ticker):
             raise ValueError(f"Invalid ticker format: {formatted_ticker}")
         
         return formatted_ticker

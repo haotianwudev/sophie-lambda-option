@@ -22,6 +22,13 @@ from src.utils.error_handling import (
     create_error_handler, DataFetchError, ValidationError, SystemError
 )
 
+# Custom JSON encoder to handle datetime and pandas Timestamp objects
+class TimestampJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if hasattr(obj, 'isoformat'):  # Handle datetime and pandas Timestamp objects
+            return obj.isoformat()
+        return super().default(obj)
+
 # Configure root logger for Lambda
 configure_root_logger()
 
@@ -440,7 +447,7 @@ def get_options_analytics(event, context):
                     )
         
         # Create successful response
-        response_body = json.dumps(response_data)
+        response_body = json.dumps(response_data, cls=TimestampJSONEncoder)
         response = {
             'statusCode': 200,
             'headers': {
@@ -455,8 +462,15 @@ def get_options_analytics(event, context):
         # Log successful response
         request_duration = time.time() - request_start_time
         logger.log_api_response(200, len(response_body))
-        logger.log_performance("total_request", request_duration, 
-                             ticker=validated_ticker, total_options=total_options)
+        
+        # Check if total_options is defined (it might not be in fallback processing)
+        if 'total_options' in locals():
+            logger.log_performance("total_request", request_duration, 
+                                ticker=validated_ticker, total_options=total_options)
+        else:
+            # If total_options is not defined, log without it
+            logger.log_performance("total_request", request_duration, 
+                                ticker=validated_ticker)
         
         return response
         
