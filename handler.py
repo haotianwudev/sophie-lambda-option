@@ -73,52 +73,26 @@ def convert_expiration_data_to_dict(expiration_data_list) -> Dict[str, list]:
     for expiration_data in expiration_data_list:
         options_list = []
         
-        # Add calls with enhanced fields
+        # Add calls with all fields dynamically
         for call in expiration_data.calls:
-            option_dict = {
-                'strike': call.strike,
-                'last_price': call.last_price,
-                'option_type': call.option_type
-            }
-            
-            # Add enhanced fields if available
-            if call.contract_symbol:
-                option_dict['contract_symbol'] = call.contract_symbol
-            if call.last_trade_date:
-                option_dict['last_trade_date'] = call.last_trade_date
-            if call.bid is not None:
-                option_dict['bid'] = call.bid
-            if call.ask is not None:
-                option_dict['ask'] = call.ask
-            if call.volume is not None:
-                option_dict['volume'] = call.volume
-            if call.open_interest is not None:
-                option_dict['open_interest'] = call.open_interest
-            
+            option_dict = {}
+            # Get all attributes from the call object
+            for attr_name in dir(call):
+                if not attr_name.startswith('_'):  # Skip private attributes
+                    attr_value = getattr(call, attr_name)
+                    if not callable(attr_value):  # Skip methods
+                        option_dict[attr_name] = attr_value
             options_list.append(option_dict)
         
-        # Add puts with enhanced fields
+        # Add puts with all fields dynamically
         for put in expiration_data.puts:
-            option_dict = {
-                'strike': put.strike,
-                'last_price': put.last_price,
-                'option_type': put.option_type
-            }
-            
-            # Add enhanced fields if available
-            if put.contract_symbol:
-                option_dict['contract_symbol'] = put.contract_symbol
-            if put.last_trade_date:
-                option_dict['last_trade_date'] = put.last_trade_date
-            if put.bid is not None:
-                option_dict['bid'] = put.bid
-            if put.ask is not None:
-                option_dict['ask'] = put.ask
-            if put.volume is not None:
-                option_dict['volume'] = put.volume
-            if put.open_interest is not None:
-                option_dict['open_interest'] = put.open_interest
-            
+            option_dict = {}
+            # Get all attributes from the put object
+            for attr_name in dir(put):
+                if not attr_name.startswith('_'):  # Skip private attributes
+                    attr_value = getattr(put, attr_name)
+                    if not callable(attr_value):  # Skip methods
+                        option_dict[attr_name] = attr_value
             options_list.append(option_dict)
         
         result[expiration_data.expiration] = options_list
@@ -375,7 +349,8 @@ def get_options_analytics(event, context):
                                 )
                 
                 # Format the market data for API response
-                response_data = data_processor.format_market_data_for_response(market_data)
+                from src.utils.data_formatter import format_market_data_for_response
+                response_data = format_market_data_for_response(market_data)
                 
                 # Log processing summary
                 total_options = sum(

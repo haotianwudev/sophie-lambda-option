@@ -168,75 +168,120 @@ class OptionsCalculator:
         from ..utils.calculation_utils import calculate_mid_price, calculate_implied_volatilities
         
         processed_options = []
-        time_to_exp = calculate_time_to_expiration(expiration_date)
+        failed_options = 0
         
-        for option in options:
-            # Calculate implied volatility based on last price (original method)
-            iv = self.calculate_implied_volatility(
-                option_price=option.last_price,
-                underlying_price=underlying_price,
-                strike_price=option.strike,
-                time_to_expiration=time_to_exp,
-                option_type=option.option_type
-            )
-            
-            # Skip options where IV calculation failed
-            if iv is None:
-                self.logger.debug(f"Skipping option with strike {option.strike} due to IV calculation failure",
-                                strike=option.strike, option_type=option.option_type)
+        try:
+            time_to_exp = calculate_time_to_expiration(expiration_date)
+            if time_to_exp <= 0:
+                self.logger.error(f"Invalid time to expiration calculated: {time_to_exp}", 
+                                expiration_date=expiration_date)
+                return []
+        except Exception as e:
+            self.logger.error(f"Failed to calculate time to expiration: {e}", 
+                            expiration_date=expiration_date, error=str(e))
+            return []
+        
+        for i, option in enumerate(options):
+            try:
+                # Validate option data
+                if not option or not hasattr(option, 'strike') or not hasattr(option, 'option_type'):
+                    self.logger.warning(f"Invalid option data at index {i}", option_index=i)
+                    failed_options += 1
+                    continue
+                
+                # Validate implied volatility
+                iv = option.implied_volatility
+                if iv is None or iv <= 0 or iv > 5.0:
+                    self.logger.warning(f"Invalid implied volatility for option {option.contract_symbol}: {iv}",
+                                      contract_symbol=option.contract_symbol, iv=iv, strike=option.strike)
+                    failed_options += 1
+                    continue
+                
+                # Calculate delta with error handling
+                delta_value = None
+                try:
+                    delta_value = self.calculate_delta(
+                        underlying_price=underlying_price,
+                        strike_price=option.strike,
+                        time_to_expiration=time_to_exp,
+                        implied_vol=iv,
+                        option_type=option.option_type
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Failed to calculate delta for option {option.contract_symbol}: {e}",
+                                      contract_symbol=option.contract_symbol, error=str(e))
+                
+                # Calculate mid price with error handling
+                mid_price = None
+                try:
+                    if option.bid is not None and option.ask is not None and option.bid > 0 and option.ask > 0:
+                        mid_price = calculate_mid_price(option.bid, option.ask)
+                except Exception as e:
+                    self.logger.warning(f"Failed to calculate mid price for option {option.contract_symbol}: {e}",
+                                      contract_symbol=option.contract_symbol, error=str(e))
+                
+                # Calculate IVs based on bid, mid, and ask prices with error handling
+                iv_results = {}
+                try:
+                    # Create option dictionary for IV calculations
+                    option_dict = {
+                        'strike': option.strike,
+                        'bid': option.bid,
+                        'ask': option.ask,
+                        'impliedVolatility': iv  # Use the calculated IV as the YF IV
+                    }
+                    
+                    iv_results = calculate_implied_volatilities(
+                        option=option_dict,
+                        current_price=underlying_price,
+                        time_to_expiration=time_to_exp,
+                        risk_free_rate=self.risk_free_rate,
+                        option_type=option.option_type
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Failed to calculate implied volatilities for option {option.contract_symbol}: {e}",
+                                      contract_symbol=option.contract_symbol, error=str(e))
+                    # Continue with empty iv_results
+                
+                # Create new OptionData with calculated values
+                try:
+                    processed_option = OptionData(
+                        strike=option.strike,
+                        last_price=option.last_price,
+                        implied_volatility=iv,  # This will be used as impliedVolatilityYF
+                        delta=delta_value,
+                        option_type=option.option_type,
+                        contract_symbol=option.contract_symbol,
+                        last_trade_date=option.last_trade_date,
+                        bid=option.bid,
+                        ask=option.ask,
+                        mid_price=mid_price,
+                        volume=option.volume,
+                        open_interest=option.open_interest,
+                        moneyness=option.moneyness,
+                        implied_volatility_bid=iv_results.get('impliedVolatilityBid'),
+                        implied_volatility_mid=iv_results.get('impliedVolatilityMid'),
+                        implied_volatility_ask=iv_results.get('impliedVolatilityAsk')
+                    )
+                    
+                    processed_options.append(processed_option)
+                    
+                except Exception as e:
+                    self.logger.warning(f"Failed to create processed option for {option.contract_symbol}: {e}",
+                                      contract_symbol=option.contract_symbol, error=str(e))
+                    failed_options += 1
+                    continue
+                    
+            except Exception as e:
+                self.logger.warning(f"Unexpected error processing option at index {i}: {e}",
+                                  option_index=i, error=str(e))
+                failed_options += 1
                 continue
-            
-            # Calculate delta
-            delta_value = self.calculate_delta(
-                underlying_price=underlying_price,
-                strike_price=option.strike,
-                time_to_expiration=time_to_exp,
-                implied_vol=iv,
-                option_type=option.option_type
-            )
-            
-            # Calculate mid price
-            mid_price = None
-            if option.bid is not None and option.ask is not None:
-                mid_price = calculate_mid_price(option.bid, option.ask)
-            
-            # Create option dictionary for IV calculations
-            option_dict = {
-                'strike': option.strike,
-                'bid': option.bid,
-                'ask': option.ask,
-                'impliedVolatility': iv  # Use the calculated IV as the YF IV
-            }
-            
-            # Calculate IVs based on bid, mid, and ask prices
-            iv_results = calculate_implied_volatilities(
-                option=option_dict,
-                current_price=underlying_price,
-                time_to_expiration=time_to_exp,
-                risk_free_rate=self.risk_free_rate,
-                option_type=option.option_type
-            )
-            
-            # Create new OptionData with calculated values
-            processed_option = OptionData(
-                strike=option.strike,
-                last_price=option.last_price,
-                implied_volatility=iv,  # This will be used as impliedVolatilityYF
-                delta=delta_value,
-                option_type=option.option_type,
-                contract_symbol=option.contract_symbol,
-                last_trade_date=option.last_trade_date,
-                bid=option.bid,
-                ask=option.ask,
-                mid_price=mid_price,
-                volume=option.volume,
-                open_interest=option.open_interest,
-                moneyness=option.moneyness,
-                implied_volatility_bid=iv_results.get('impliedVolatilityBid'),
-                implied_volatility_mid=iv_results.get('impliedVolatilityMid'),
-                implied_volatility_ask=iv_results.get('impliedVolatilityAsk')
-            )
-            
-            processed_options.append(processed_option)
+        
+        # Log summary
+        total_options = len(options)
+        successful_options = len(processed_options)
+        self.logger.info(f"Options processing complete: {successful_options}/{total_options} successful, {failed_options} failed",
+                        total_options=total_options, successful_options=successful_options, failed_options=failed_options)
         
         return processed_options

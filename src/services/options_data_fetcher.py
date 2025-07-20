@@ -138,7 +138,7 @@ class OptionsDataFetcher:
                 option_data = OptionData(
                     strike=strike,
                     last_price=last_price,
-                    implied_volatility=None,  # Will be calculated later
+                    implied_volatility=float(row.get('impliedVolatility', 0 )),  # implied_volatility_yf
                     delta=None,  # Will be calculated later
                     option_type=option_type,
                     contract_symbol=contract_symbol,

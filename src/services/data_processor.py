@@ -133,9 +133,20 @@ class DataProcessor:
                 option = OptionData(
                     strike=float(raw_option.get('strike', 0)),
                     last_price=float(raw_option.get('last_price', 0)) if raw_option.get('last_price') is not None else None,
-                    implied_volatility=None,  # Will be calculated
+                    implied_volatility=float(raw_option.get('implied_volatility', 0)),  # implied_volatility_yf
                     delta=None,  # Will be calculated
-                    option_type=raw_option.get('option_type', 'c')
+                    option_type=raw_option.get('option_type', 'c'),
+                    contract_symbol=raw_option.get('contract_symbol'),
+                    last_trade_date=raw_option.get('last_trade_date'),
+                    bid=float(raw_option.get('bid', 0)) if raw_option.get('bid') is not None else None,
+                    ask=float(raw_option.get('ask', 0)) if raw_option.get('ask') is not None else None,
+                    mid_price=None,  # Will be calculated
+                    volume=int(raw_option.get('volume', 0)) if raw_option.get('volume') is not None else None,
+                    open_interest=int(raw_option.get('open_interest', 0)) if raw_option.get('open_interest') is not None else None,
+                    moneyness=None,  # Will be calculated
+                    implied_volatility_bid=None,  # Will be calculated
+                    implied_volatility_mid=None,  # Will be calculated
+                    implied_volatility_ask=None   # Will be calculated
                 )
                 options.append(option)
             except (ValueError, TypeError) as e:

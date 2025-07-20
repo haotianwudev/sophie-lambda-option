@@ -16,52 +16,45 @@ def format_option_for_response(option: OptionData) -> Dict[str, Any]:
     Returns:
         Dictionary formatted for JSON response
     """
-    response = {
-        "strike": round(option.strike, 2),
-        "lastPrice": round(option.last_price, 2) if option.last_price else None,
-        "impliedVolatilityYF": round(option.implied_volatility, 4) if option.implied_volatility else None,
-        "delta": round(option.delta, 4) if option.delta else None
+    def safe_round(value, decimals):
+        return round(value, decimals) if value is not None else None
+    
+    def safe_get(attr_name):
+        return getattr(option, attr_name, None)
+    
+    # Field mapping: response_key -> (attribute_name, decimal_places)
+    numeric_fields = {
+        "strike": ("strike", 2),
+        "lastPrice": ("last_price", 2),
+        "impliedVolatilityYF": ("implied_volatility", 4),
+        "delta": ("delta", 4),
+        "bid": ("bid", 2),
+        "ask": ("ask", 2),
+        "midPrice": ("mid_price", 2),
+        "moneyness": ("moneyness", 3),
+        "impliedVolatilityBid": ("implied_volatility_bid", 4),
+        "impliedVolatilityMid": ("implied_volatility_mid", 4),
+        "impliedVolatilityAsk": ("implied_volatility_ask", 4),
     }
     
-    # Add contract symbol if available
-    if option.contract_symbol:
-        response["contractSymbol"] = option.contract_symbol
+    # Direct fields (no rounding needed)
+    direct_fields = {
+        "contractSymbol": "contract_symbol",
+        "lastTradeDate": "last_trade_date",
+        "volume": "volume",
+        "openInterest": "open_interest",
+    }
     
-    # Add last trade date if available
-    if option.last_trade_date:
-        response["lastTradeDate"] = option.last_trade_date
+    # Build response
+    response = {
+        key: safe_round(safe_get(attr), decimals) 
+        for key, (attr, decimals) in numeric_fields.items()
+    }
     
-    # Add bid and ask if available
-    if option.bid is not None:
-        response["bid"] = round(option.bid, 2)
-    
-    if option.ask is not None:
-        response["ask"] = round(option.ask, 2)
-    
-    # Add mid price if available
-    if option.mid_price is not None:
-        response["midPrice"] = round(option.mid_price, 2)
-    
-    # Add volume and open interest if available
-    if option.volume is not None:
-        response["volume"] = option.volume
-    
-    if option.open_interest is not None:
-        response["openInterest"] = option.open_interest
-    
-    # Add moneyness if available
-    if option.moneyness is not None:
-        response["moneyness"] = round(option.moneyness, 3)
-    
-    # Add the new implied volatility fields
-    if option.implied_volatility_bid is not None:
-        response["impliedVolatilityBid"] = round(option.implied_volatility_bid, 4)
-    
-    if option.implied_volatility_mid is not None:
-        response["impliedVolatilityMid"] = round(option.implied_volatility_mid, 4)
-    
-    if option.implied_volatility_ask is not None:
-        response["impliedVolatilityAsk"] = round(option.implied_volatility_ask, 4)
+    response.update({
+        key: safe_get(attr) 
+        for key, attr in direct_fields.items()
+    })
     
     return response
 
